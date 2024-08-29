@@ -10,6 +10,9 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // Routes
 app.use('/api/upload', require('./routes/video'));
+app.use('/api/convert', require('./routes/convert'));
+app.use('/api/files-list', require('./routes/filesList'));
+
 
 // Start the server
 const PORT = process.env.PORT || 3000;

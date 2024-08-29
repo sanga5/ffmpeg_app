@@ -4,9 +4,30 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Convert Video</title>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      fetch('/api/files-list')
+        .then(response => response.json())
+        .then(data => {
+          const select = document.getElementById('file');
+          data.files.forEach(file => {
+            const option = document.createElement('option');
+            option.value = file;
+            option.textContent = file;
+            select.appendChild(option);
+          });
+        });
+    });
+  </script>
 </head>
 <body>
   <h1>Convert Video</h1>
+  <form action="/api/convert" method="post" enctype="multipart/form-data">
+    <label for="file">Select video file:</label>
+    <select id="file" name="file" required>
+      <!-- Options will be populated by JavaScript -->
+    </select>
+    <br><br>
     <label for="format">Select output format:</label>
     <select id="format" name="format" required>
       <option value="mov">MOV</option>
