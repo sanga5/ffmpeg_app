@@ -3,6 +3,6 @@ const router = express.Router();
 const upload = require('../middleware/upload');
 const uploadController = require('../controllers/uploadController');
 
-router.post('/', upload.single('file'), uploadController.uploadVideo);
+router.post('/', uploadController.uploadFile);
 
 module.exports = router;

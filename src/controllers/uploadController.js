@@ -1,16 +1,27 @@
 const path = require('path');
+const fs = require('fs');
 
-exports.uploadVideo = (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ message: 'No file uploaded' });
-  }
+// Handle file uploads
+exports.uploadFile = (req, res) => {
+    if (!req.session.user) {
+        return res.status(403).send('Not logged in');
+    }
 
-  const filePath = path.join(__dirname, '../uploads', req.file.originalname);
+    // Ensure the user's directory exists
+    const userDir = path.join(__dirname, '../uploads', req.session.user);
+    if (!fs.existsSync(userDir)) {
+        fs.mkdirSync(userDir, { recursive: true });
+    }
 
-  // Check if redirect parameter is present
-  if (req.query.redirect) {
-    return res.redirect('/convert.html'); // Redirect to the new HTML page
-  }
+    // Construct the file path
+    const filePath = path.join(userDir, req.file.originalname);
 
-  return res.status(200).json({ message: 'File uploaded successfully', file: req.file });
+    // Save the file
+    fs.writeFile(filePath, req.file.buffer, (err) => {
+        if (err) {
+            return res.status(500).send('Failed to save file');
+        }
+
+        res.redirect('/upload');
+    });
 };

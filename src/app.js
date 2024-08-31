@@ -1,18 +1,42 @@
 const express = require('express');
 const path = require('path');
+const session = require('express-session');
+const loginRouter = require('./routes/login');
+
 const app = express();
 
 // Middleware to parse JSON
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Serve static files
+// Session middleware
+app.use(session({
+  secret: 'your-secret-key',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: false }
+}));
+
+// Middleware to serve static files
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Routes
-app.use('/api/upload', require('./routes/video'));
-app.use('/api/convert', require('./routes/convert'));
-app.use('/api/files-list', require('./routes/filesList'));
+// Default route to serve login.html
+app.get('/', (req, res) => {
+  const filePath = path.join(__dirname, '../public/login.html');
+  res.sendFile(filePath);
+});
 
+// Register routes
+app.use('/login', loginRouter);
+
+// Serve upload.html at /upload
+app.get('/upload', (req, res) => {
+  if (req.session.user) {
+    res.sendFile(path.join(__dirname, '../public/upload.html'));
+  } else {
+    res.redirect('/');
+  }
+});
 
 // Start the server
 const PORT = process.env.PORT || 3000;
