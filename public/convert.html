@@ -1,97 +1,112 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Convert Video</title>
-  <style>
-    body {
-        font-family: Arial, sans-serif;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-        background-color: #f0f0f0;
-        margin: 0;
-    }
-    .convert-container {
-        background-color: #fff;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        width: 300px;
-    }
-    .convert-container h1 {
-        margin-top: 0;
-        font-size: 1.5em;
-        text-align: center;
-    }
-    .form-group {
-        margin-bottom: 15px;
-    }
-    .form-group label {
-        display: block;
-        margin-bottom: 5px;
-    }
-    .form-group select {
-        width: 100%;
-        padding: 8px;
-        box-sizing: border-box;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-    }
-    .form-group button {
-        width: 100%;
-        padding: 10px;
-        background-color: #007bff;
-        color: #fff;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-    .form-group button:hover {
-        background-color: #0056b3;
-    }
-  </style>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      fetch('/api/files-list')
-        .then(response => response.json())
-        .then(data => {
-          const select = document.getElementById('file');
-          data.files.forEach(file => {
-            const option = document.createElement('option');
-            option.value = file;
-            option.textContent = file;
-            select.appendChild(option);
-          });
-        });
-    });
-  </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convert</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            margin: 0;
+        }
+        .convert-container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+        .convert-container h2 {
+            margin-top: 0;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .form-group select, .form-group button {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .form-group button {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+        .form-group button:hover {
+            background-color: #0056b3;
+        }
+    </style>
 </head>
 <body>
-  <div class="convert-container">
-    <h1>Convert Video</h1>
-    <form action="/api/convert" method="post">
-      <div class="form-group">
-        <label for="file">Select video file:</label>
-        <select id="file" name="file" required>
-          <!-- Options will be populated by JavaScript -->
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="format">Select output format:</label>
-        <select id="format" name="format" required>
-          <option value="mov">MOV</option>
-          <option value="mp4">MP4</option>
-          <option value="avi">AVI</option>
-          <!-- Add more formats as needed -->
-        </select>
-      </div>
-      <div class="form-group">
-        <button type="submit">Convert</button>
-      </div>
-    </form>
-  </div>
+    <div class="convert-container">
+        <h2>Convert Files</h2>
+        <form id="convert-form" action="/api/convert" method="post">
+            <div class="form-group">
+                <label for="file-select">Select a file to convert:</label>
+                <select id="file-select" name="file">
+                    <!-- Options will be populated here -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="format">Select format:</label>
+                <select id="format" name="format">
+                    <option value="mp4">MP4</option>
+                    <option value="avi">AVI</option>
+                    <option value="mov">MOV</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <button type="submit">Convert</button>
+            </div>
+        </form>
+    </div>
+
+  <script>
+    // Fetch the list of files and populate the file list and select options
+    fetch('/api/files-list')
+      .then(response => response.json())
+      .then(files => {
+        const fileList = document.getElementById('file-list');
+        const fileSelect = document.getElementById('file-select');
+        files.forEach(file => {
+          const option = document.createElement('option');
+          option.value = file;
+          option.textContent = file;
+          fileSelect.appendChild(option);
+        });
+      })
+      .catch(error => {
+        console.error('Error fetching file list:', error);
+      });
+
+    // Handle form submission for file conversion
+    document.getElementById('convert-form').addEventListener('submit', function(event) {
+      event.preventDefault();
+      const formData = new FormData(this);
+      fetch('/api/convert', {
+        method: 'POST',
+        body: new URLSearchParams(formData)
+      })
+      .then(response => response.json())
+      .then(data => {
+        alert('File converted successfully');
+      })
+      .catch(error => {
+        console.error('Error converting file:', error);
+      });
+    });
+    </script>
 </body>
 </html>

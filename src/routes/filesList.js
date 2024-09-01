@@ -1,10 +1,17 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const router = express.Router();
-const filesListController = require('../controllers/filesListController');
 
-router.get('/', filesListController.listFiles);
+router.get('/', (req, res) => {
+  const uploadsDir = path.join(__dirname, '../../uploads');
 
-console.log('FilesListController:', filesListController);
-
+  fs.readdir(uploadsDir, (err, files) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error reading directory' });
+    }
+    res.json({ files });
+  });
+});
 
 module.exports = router;

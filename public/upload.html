@@ -31,21 +31,33 @@
             display: block;
             margin-bottom: 5px;
         }
-        .form-group input[type="file"] {
+        .form-group input {
             width: 100%;
             padding: 8px;
             box-sizing: border-box;
             border: 1px solid #ccc;
             border-radius: 4px;
         }
-        .form-group button {
-            width: 100%;
-            padding: 10px;
+        .form-group input[type="submit"] {
             background-color: #007bff;
             color: #fff;
             border: none;
-            border-radius: 4px;
             cursor: pointer;
+        }
+        .form-group input[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+        .form-group button {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
         }
         .form-group button:hover {
             background-color: #0056b3;
@@ -55,15 +67,18 @@
 <body>
     <div class="upload-container">
         <h2>Upload File</h2>
-        <form action="/api/upload?redirect=true" method="post" enctype="multipart/form-data">
+        <form action="/api/upload" method="POST" enctype="multipart/form-data">
             <div class="form-group">
                 <label for="file">Choose file:</label>
                 <input type="file" id="file" name="file" required>
             </div>
             <div class="form-group">
-                <button type="submit">Upload</button>
+                <input type="submit" value="Upload">
             </div>
         </form>
+        <div class="form-group">
+            <button onclick="window.location.href='/convert'">Convert Stored File</button>
+        </div>
     </div>
 </body>
 </html>
