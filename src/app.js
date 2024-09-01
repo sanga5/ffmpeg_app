@@ -100,7 +100,6 @@ app.get('/api/files-list', isAuthenticated, (req, res) => {
 // Convert route
 app.post('/api/convert', isAuthenticated, (req, res) => {
   const { file, format } = req.body;
-  console.log('Request body:', req.body); // Debugging line
   if (!file || !format) {
     return res.status(400).json({ error: 'File and format are required' });
   }
@@ -108,10 +107,7 @@ app.post('/api/convert', isAuthenticated, (req, res) => {
   const userDir = req.session.user.uploadDir;
   const filePath = path.join(userDir, file);
   const outputFilePath = path.join(userDir, `${path.parse(file).name}.${format}`);
-
-  console.log('File path:', filePath); // Debugging line
-  console.log('Output file path:', outputFilePath); // Debugging line
-
+  
   // Use ffmpeg to convert the file
   ffmpeg(filePath)
     .toFormat(format)
@@ -124,6 +120,8 @@ app.post('/api/convert', isAuthenticated, (req, res) => {
       console.error('Error during conversion:', err); // Debugging line
       res.status(500).json({ error: 'Error converting file', details: err.message });
     });
+
+
 });
 
 // Start the server
