@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const session = require('express-session');
 const loginRouter = require('./routes/login');
+const uploadRouter = require('./routes/upload');
 
 const app = express();
 
@@ -26,8 +27,8 @@ app.get('/', (req, res) => {
   res.sendFile(filePath);
 });
 
-// Register routes
 app.use('/login', loginRouter);
+app.use('/api/upload', uploadRouter);
 
 // Serve upload.html at /upload
 app.get('/upload', (req, res) => {
