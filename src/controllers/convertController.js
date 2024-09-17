@@ -1,7 +1,6 @@
 const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
 
-// Define the base directory for uploads
 const uploadsDir = path.join(__dirname, '../../uploads');
 
 exports.convertVideo = (req, res) => {
