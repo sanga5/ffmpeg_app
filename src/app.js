@@ -1,21 +1,19 @@
 const express = require('express');
-const path = require('path');
 const bodyParser = require('body-parser');
 const session = require('express-session');
+const path = require('path');
 const fs = require('fs');
+const cookieParser = require('cookie-parser');
+const Cognito = require('@aws-sdk/client-cognito-identity-provider');
+const { CognitoJwtVerifier } = require('aws-jwt-verify');
 const multer = require('multer');
 const ffmpeg = require('fluent-ffmpeg');
+const { S3Client, PutObjectCommand, ListObjectsCommand } = require('@aws-sdk/client-s3');
 const app = express();
-const Cognito = require("@aws-sdk/client-cognito-identity-provider");
-const { CognitoIdentityProviderClient, SignUpCommand, ConfirmSignUpCommand, InitiateAuthCommand, AuthFlowType } = require('@aws-sdk/client-cognito-identity-provider');
-const { CognitoJwtVerifier } = require('aws-jwt-verify');
-const cognitoClient = new Cognito.CognitoIdentityProviderClient({ region: 'ap-southeast-2' });
-const cookieParser = require('cookie-parser');
-
-
+const s3 = new S3Client({ region: 'ap-southeast-2' });
 
 // Middleware to parse JSON and URL-encoded data
-app.use(express.json());
+app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 
@@ -26,9 +24,20 @@ app.use(session({
   saveUninitialized: true
 }));
 
+// // Ensure upload directories exist
+// Object.values(users).forEach(user => {
+//   if (!fs.existsSync(user.uploadDir)) {
+//     fs.mkdirSync(user.uploadDir, { recursive: true });
+//   }
+// });
+
+
 const userPoolId = "ap-southeast-2_ze3iU7nm8"; // Obtain from AWS console
 const clientId = "d8ng8gora28qtlghnn5g3m1kj"; // match signUp.js
 const region = "ap-southeast-2";
+
+// Initialize Cognito client
+const cognitoClient = new Cognito.CognitoIdentityProviderClient({ region });
 
 const idVerifier = CognitoJwtVerifier.create({
   userPoolId,
@@ -55,24 +64,24 @@ Object.values(users).forEach(user => {
   }
 });
 
+
 // Serve static files
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Serve login.html as the default file
+// Serve signup.html as the default file
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public', 'signup.html'));
 });
 
-app.post ('/loginPage', async (req, res) => {
+// Redirect to login page
+app.post('/loginPage', (req, res) => {
   res.sendFile(path.join(__dirname, '../public', 'login.html'));
 });
-
 
 // Signup route
 app.post('/signup', async (req, res) => {
   const { username, password, email } = req.body;
-  console.log("Signing up user");
-  const client = new Cognito.CognitoIdentityProviderClient({ region: 'ap-southeast-2' });
+
   const command = new Cognito.SignUpCommand({
     ClientId: clientId,
     Username: username,
@@ -90,47 +99,39 @@ app.post('/signup', async (req, res) => {
 });
 
 // Confirm email route
-app.post('/confirm', (req, res) => {
+app.post('/confirm', async (req, res) => {
   const { username, code } = req.body;
 
-  const params = {
+  const command = new Cognito.ConfirmSignUpCommand({
     ClientId: clientId,
     Username: username,
-    ConfirmationCode: code
-  };
-
-  cognito.confirmSignUp(params, (err, data) => {
-    if (err) {
-      console.log(err);
-      res.send('Error confirming email');
-    } else {
-      res.send('Email confirmed, you can now login');
-    }
+    ConfirmationCode: code,
   });
+
+  try {
+    const cognitoResponse = await cognitoClient.send(command);
+    res.send('Email confirmed, you can now login');
+  } catch (err) {
+    console.log(err);
+    res.send('Error confirming email');
+  }
 });
 
 // Login route
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
-  const client = new Cognito.CognitoIdentityProviderClient({
-    region: 'ap-southeast-2',
-  });
-
-  console.log('Getting auth token');
-
-  // Get authentication tokens from the Cognito API using username and password
   const command = new Cognito.InitiateAuthCommand({
     AuthFlow: Cognito.AuthFlowType.USER_PASSWORD_AUTH,
+    ClientId: clientId,
     AuthParameters: {
       USERNAME: username,
       PASSWORD: password,
     },
-    ClientId: clientId,
   });
 
   try {
-    const response = await client.send(command);
+    const response = await cognitoClient.send(command);
     console.log(response);
 
     // ID Tokens are used to authenticate users to your application
@@ -139,12 +140,14 @@ app.post('/login', async (req, res) => {
     console.log(IdTokenVerifyResult);
 
     // Access tokens are used to link IAM roles to identities for accessing AWS services
-    // Most students will not use these
     const accessToken = response.AuthenticationResult.AccessToken;
     const accessTokenVerifyResult = await accessVerifier.verify(accessToken);
     console.log(accessTokenVerifyResult);
 
+    // Set the ID token as a cookie
     res.cookie('idToken', IdToken, { httpOnly: true });
+
+    // Redirect to the upload page
     res.redirect('/upload');
   } catch (err) {
     console.log(err);
@@ -154,7 +157,7 @@ app.post('/login', async (req, res) => {
 
 // Middleware to check authentication
 function isAuthenticated(req, res, next) {
-  if (req.cookies.idtoken) {
+  if (req.cookies.idToken) {
     next();
   } else {
     res.redirect('/');
@@ -225,12 +228,6 @@ app.post('/api/convert', isAuthenticated, (req, res) => {
 
 });
 
-// Start the server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(3000, () => {
+  console.log('Server is running on port 3000');
 });
-
-module.exports = app;
-
-// Generative AI was used to provide comments and error handling/logging for the code.
