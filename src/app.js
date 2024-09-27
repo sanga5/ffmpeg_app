@@ -186,11 +186,17 @@ app.get('/convert', isAuthenticated, (req, res) => {
 // });
 // const upload = multer({ storage });
 
-// Upload route
-app.post('/api/upload', isAuthenticated, upload.single('file'), (req, res) => {
-  res.redirect('/convert');
 
+// Serve upload.html for authenticated users
+app.get('/upload', isAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, '../public', 'upload.html'));
 });
+
+// // Upload route
+// app.post('/api/upload', isAuthenticated, upload.single('file'), (req, res) => {
+//   res.redirect('/convert');
+
+// });
 
 // // List files route
 // app.get('/api/files-list', isAuthenticated, (req, res) => {
