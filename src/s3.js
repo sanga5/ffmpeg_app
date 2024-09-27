@@ -1,6 +1,9 @@
 const { S3Client, CreateBucketCommand, PutBucketTaggingCommand, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
+require("dotenv").config();
+const S3 = require("@aws-sdk/client-s3");
+const S3Presigner = require("@aws-sdk/s3-request-presigner");
 const bucketName = 'n11611553-test'; // Change to your unique bucket name
 const qutUsername = 'n11611553@qut.edu.au'; // Change to your username
 const purpose = 'prac';
