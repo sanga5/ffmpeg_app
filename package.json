@@ -7,7 +7,12 @@
         "start": "node src/app.js"
     },
     "dependencies": {
-        "express": "^4.19.2",
+        "@aws-sdk/client-cognito-identity-provider": "^3.651.1",
+        "aws-jwt-verify": "^4.0.1",
+        "aws-sdk": "^2.1691.0",
+        "cookie-parser": "^1.4.6",
+        "cookieparser": "^0.1.0",
+        "express": "^4.21.0",
         "express-session": "^1.18.0",
         "ffmpeg": "^0.0.4",
         "ffmpeg-static": "^5.0.0",
