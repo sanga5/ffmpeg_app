@@ -11,6 +11,7 @@ const ffmpeg = require('fluent-ffmpeg');
 const { S3Client, PutObjectCommand, ListObjectsCommand } = require('@aws-sdk/client-s3');
 const app = express();
 const s3 = new S3Client({ region: 'ap-southeast-2' });
+const { createBucket, tagBucket, writeObject, readObject, generatePresignedUrl } = require('./s3');
 
 // Middleware to parse JSON and URL-encoded data
 app.use(bodyParser.json());
@@ -51,18 +52,18 @@ const accessVerifier = CognitoJwtVerifier.create({
   clientId,
 });
 
-// Hard-coded users
-const users = {
-  user1: { username: 'user1', password: 'password1', uploadDir: 'uploads/user1' },
-  user2: { username: 'user2', password: 'password2', uploadDir: 'uploads/user2' }
-};
+// // Hard-coded users
+// const users = {
+//   user1: { username: 'user1', password: 'password1', uploadDir: 'uploads/user1' },
+//   user2: { username: 'user2', password: 'password2', uploadDir: 'uploads/user2' }
+// };
 
-// Ensure upload directories exist
-Object.values(users).forEach(user => {
-  if (!fs.existsSync(user.uploadDir)) {
-    fs.mkdirSync(user.uploadDir, { recursive: true });
-  }
-});
+// // Ensure upload directories exist
+// Object.values(users).forEach(user => {
+//   if (!fs.existsSync(user.uploadDir)) {
+//     fs.mkdirSync(user.uploadDir, { recursive: true });
+//   }
+// });
 
 
 // Serve static files
@@ -174,16 +175,16 @@ app.get('/convert', isAuthenticated, (req, res) => {
   res.sendFile(path.join(__dirname, '../public', 'convert.html'));
 });
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, req.session.user.uploadDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, file.originalname);
-  }
-});
-const upload = multer({ storage });
+// // Configure multer for file uploads
+// const storage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     cb(null, req.session.user.uploadDir);
+//   },
+//   filename: (req, file, cb) => {
+//     cb(null, file.originalname);
+//   }
+// });
+// const upload = multer({ storage });
 
 // Upload route
 app.post('/api/upload', isAuthenticated, upload.single('file'), (req, res) => {
@@ -191,15 +192,15 @@ app.post('/api/upload', isAuthenticated, upload.single('file'), (req, res) => {
 
 });
 
-// List files route
-app.get('/api/files-list', isAuthenticated, (req, res) => {
-  fs.readdir(req.session.user.uploadDir, (err, files) => {
-    if (err) {
-      return res.status(500).send('Unable to list files');
-    }
-    res.json(files);
-  });
-});
+// // List files route
+// app.get('/api/files-list', isAuthenticated, (req, res) => {
+//   fs.readdir(req.session.user.uploadDir, (err, files) => {
+//     if (err) {
+//       return res.status(500).send('Unable to list files');
+//     }
+//     res.json(files);
+//   });
+// });
 
 // Convert route
 app.post('/api/convert', isAuthenticated, (req, res) => {
@@ -224,9 +225,18 @@ app.post('/api/convert', isAuthenticated, (req, res) => {
       console.error('Error during conversion:', err); // Debugging line
       res.status(500).json({ error: 'Error converting file', details: err.message });
     });
-
-
 });
+
+// Initialize S3 bucket and perform operations
+async function initializeS3() {
+  await createBucket();
+  await tagBucket();
+  await writeObject();
+  await readObject();
+  await generatePresignedUrl();
+}
+
+initializeS3();
 
 app.listen(3000, () => {
   console.log('Server is running on port 3000');
