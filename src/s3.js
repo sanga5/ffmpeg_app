@@ -1,14 +1,13 @@
-// s3.js
 const { S3Client, CreateBucketCommand, PutBucketTaggingCommand, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-const fetch = require('node-fetch');
 
-const bucketName = 'n1234567-test'; // Change to your unique bucket name
-const qutUsername = 'n1234567@qut.edu.au'; // Change to your username
+const bucketName = 'n11611553-test'; // Change to your unique bucket name
+const qutUsername = 'n11611553@qut.edu.au'; // Change to your username
 const purpose = 'prac';
 const objectKey = 'myAwesomeObjectKey';
 const objectValue = 'This could be just about anything.';
 
+// Create an S3 client using the default credential provider chain
 const s3Client = new S3Client({ region: 'ap-southeast-2' });
 
 async function createBucket() {
@@ -81,10 +80,14 @@ async function generatePresignedUrl() {
         console.log('Pre-signed URL to get the object:');
         console.log(presignedURL);
 
+        // Dynamically import node-fetch
+        const fetch = (await import('node-fetch')).default;
+
         const response = await fetch(presignedURL);
         const object = await response.text();
         console.log('Object retrieved with pre-signed URL: ');
         console.log(object);
+
     } catch (err) {
         console.log(err);
     }
