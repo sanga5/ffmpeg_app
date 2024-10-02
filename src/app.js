@@ -6,18 +6,21 @@ const path = require('path');
 const fs = require('fs');
 const cookieParser = require('cookie-parser');
 //const Cognito = require('@aws-sdk/client-cognito-identity-provider');
+const { promisify } = require('util');
+const stream = require('stream');
+const pipeline = promisify(stream.pipeline);
+const { PassThrough } = require('stream');
+const { Upload } = require('@aws-sdk/lib-storage');
+const { v4: uuidv4 } = require('uuid');
 
 const { CognitoJwtVerifier } = require('aws-jwt-verify');
 const multer = require('multer');
 const multerS3 = require('multer-s3');
 const ffmpeg = require('fluent-ffmpeg');
-const { S3Client, PutObjectCommand, ListObjectsCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command} = require('@aws-sdk/client-s3');
 const app = express();
 const s3 = new S3Client({ region: 'ap-southeast-2' });
 const { createBucket, tagBucket, writeObject, readObject, generatePresignedUrl } = require('./s3');
-
-
-
 
 
 // Middleware to parse JSON and URL-encoded data
@@ -58,20 +61,6 @@ const accessVerifier = CognitoJwtVerifier.create({
   tokenUse: 'access',
   clientId,
 });
-
-// // Hard-coded users
-// const users = {
-//   user1: { username: 'user1', password: 'password1', uploadDir: 'uploads/user1' },
-//   user2: { username: 'user2', password: 'password2', uploadDir: 'uploads/user2' }
-// };
-
-// // Ensure upload directories exist
-// Object.values(users).forEach(user => {
-//   if (!fs.existsSync(user.uploadDir)) {
-//     fs.mkdirSync(user.uploadDir, { recursive: true });
-//   }
-// });
-
 
 // Serve static files
 app.use(express.static(path.join(__dirname, '../public')));
@@ -182,16 +171,6 @@ app.get('/convert', isAuthenticated, (req, res) => {
   res.sendFile(path.join(__dirname, '../public', 'convert.html'));
 });
 
-// // Configure multer for file uploads
-// const storage = multer.diskStorage({
-//   destination: (req, file, cb) => {
-//     cb(null, req.session.user.uploadDir);
-//   },
-//   filename: (req, file, cb) => {
-//     cb(null, file.originalname);
-//   }
-// });
-// const upload = multer({ storage });
 
 // Configure multer to use S3
 const upload = multer({
@@ -205,7 +184,7 @@ const upload = multer({
 });
 
 // Upload route
-  app.post('/upload', isAuthenticated, upload.single('file'), (req, res) => {
+  app.post('/api/upload', isAuthenticated, upload.single('file'), (req, res) => {
   res.redirect('/convert');
  });
 
@@ -219,33 +198,128 @@ const upload = multer({
 //   });
 // });
 
+// List files route
+app.get('/api/files-list', isAuthenticated, async (req, res) => {
+  try {
+    const command = new ListObjectsV2Command({
+      Bucket: 'n11611553-test',
+    });
+    const data = await s3.send(command);
+    const files = data.Contents.map(item => item.Key);
+    res.json(files);
+  } catch (err) {
+    res.status(500).send('Unable to list files');
+  }
+});
+
+
+
+// // Convert route
+// app.post('/api/convert', isAuthenticated, (req, res) => {
+//   const { file, format } = req.body;
+//   if (!file || !format) {
+//     return res.status(400).json({ error: 'File and format are required' });
+//   }
+
+//   const userDir = req.session.user.uploadDir;
+//   const filePath = path.join(userDir, file);
+//   const outputFilePath = path.join(userDir, `${path.parse(file).name}.${format}`);
+  
+//   // Use ffmpeg to convert the file
+//   ffmpeg(filePath)
+//     .toFormat(format)
+//     .save(outputFilePath)
+//     .on('end', () => {
+//       console.log('Conversion successful:', outputFilePath); // Debugging line
+//       res.json({ message: 'File converted successfully', outputFile: outputFilePath });
+//     })
+//     .on('error', (err) => {
+//       console.error('Error during conversion:', err); // Debugging line
+//       res.status(500).json({ error: 'Error converting file', details: err.message });
+//     });
+// });
+
+
 
 
 
 // Convert route
-app.post('/api/convert', isAuthenticated, (req, res) => {
+app.post('/api/convert', isAuthenticated, async (req, res) => {
   const { file, format } = req.body;
   if (!file || !format) {
     return res.status(400).json({ error: 'File and format are required' });
   }
 
-  const userDir = req.session.user.uploadDir;
-  const filePath = path.join(userDir, file);
-  const outputFilePath = path.join(userDir, `${path.parse(file).name}.${format}`);
-  
-  // Use ffmpeg to convert the file
-  ffmpeg(filePath)
-    .toFormat(format)
-    .save(outputFilePath)
-    .on('end', () => {
-      console.log('Conversion successful:', outputFilePath); // Debugging line
-      res.json({ message: 'File converted successfully', outputFile: outputFilePath });
-    })
-    .on('error', (err) => {
-      console.error('Error during conversion:', err); // Debugging line
-      res.status(500).json({ error: 'Error converting file', details: err.message });
+  const bucketName = 'n11611553-test';
+  const localInputPath = `/tmp/${uuidv4()}-${path.basename(file)}`;
+  const localOutputPath = `/tmp/${uuidv4()}.${format}`;
+  const outputKey = `${path.parse(file).name}.${format}`;
+
+  try {
+    // Download the file from S3 to the local disk
+    const getObjectParams = {
+      Bucket: bucketName,
+      Key: file,
+    };
+    const getObjectCommand = new GetObjectCommand(getObjectParams);
+    const data = await s3.send(getObjectCommand);
+
+    // Write the file to the local disk
+    const writeStream = fs.createWriteStream(localInputPath);
+    data.Body.pipe(writeStream);
+
+    await new Promise((resolve, reject) => {
+      writeStream.on('finish', resolve);
+      writeStream.on('error', reject);
     });
+
+    // Convert the file using ffmpeg
+    await new Promise((resolve, reject) => {
+      ffmpeg(localInputPath)
+        .output(localOutputPath)
+        .on('start', commandLine => {
+          console.log('Spawned Ffmpeg with command: ' + commandLine);
+        })
+        .on('progress', progress => {
+          console.log('Processing: ' + (progress.percent || 0).toFixed(2) + '% done');
+        })
+        .on('error', (err, stdout, stderr) => {
+          console.error('Error during conversion:', err.message);
+          console.error('ffmpeg stdout:', stdout);
+          console.error('ffmpeg stderr:', stderr);
+          reject(err);
+        })
+        .on('end', resolve)
+        .run();
+    });
+
+    // Upload the converted file back to S3
+    const fileStream = fs.createReadStream(localOutputPath);
+    const putObjectParams = {
+      Bucket: bucketName,
+      Key: outputKey,
+      Body: fileStream,
+    };
+    const putObjectCommand = new PutObjectCommand(putObjectParams);
+    await s3.send(putObjectCommand);
+
+    // Delete the local files
+    fs.unlinkSync(localInputPath);
+    fs.unlinkSync(localOutputPath);
+
+    res.json({ message: 'File converted successfully', outputFile: outputKey });
+  } catch (err) {
+    console.error('Error during conversion:', err);
+    if (fs.existsSync(localInputPath)) fs.unlinkSync(localInputPath);
+    if (fs.existsSync(localOutputPath)) fs.unlinkSync(localOutputPath);
+    res.status(500).json({ error: 'Error converting file', details: err.message });
+  }
 });
+
+
+
+
+
 
 // Initialize S3 bucket and perform operations
 async function initializeS3() {
