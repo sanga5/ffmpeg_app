@@ -144,8 +144,8 @@ app.post('/login', async (req, res) => {
     // Set the ID token as a cookie
     res.cookie('idToken', IdToken, { httpOnly: true });
 
-    // Redirect to the upload page
-    res.redirect('/upload');
+    // Redirect to the main page
+    res.redirect('/main');
   } catch (err) {
     console.log(err);
     res.send('Invalid username or password');
@@ -160,6 +160,11 @@ function isAuthenticated(req, res, next) {
     res.redirect('/');
   }
 }
+
+// Serve main.html for authenticated users
+app.get('/main', isAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, '../public', 'main.html'));
+});
 
 // Serve upload.html for authenticated users
 app.get('/upload', isAuthenticated, (req, res) => {
