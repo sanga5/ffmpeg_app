@@ -1,17 +1,24 @@
+const Cognito = require("@aws-sdk/client-cognito-identity-provider");
 const express = require('express');
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const path = require('path');
 const fs = require('fs');
 const cookieParser = require('cookie-parser');
-const Cognito = require('@aws-sdk/client-cognito-identity-provider');
+//const Cognito = require('@aws-sdk/client-cognito-identity-provider');
+
 const { CognitoJwtVerifier } = require('aws-jwt-verify');
 const multer = require('multer');
+const multerS3 = require('multer-s3');
 const ffmpeg = require('fluent-ffmpeg');
 const { S3Client, PutObjectCommand, ListObjectsCommand } = require('@aws-sdk/client-s3');
 const app = express();
 const s3 = new S3Client({ region: 'ap-southeast-2' });
 const { createBucket, tagBucket, writeObject, readObject, generatePresignedUrl } = require('./s3');
+
+
+
+
 
 // Middleware to parse JSON and URL-encoded data
 app.use(bodyParser.json());
@@ -186,17 +193,21 @@ app.get('/convert', isAuthenticated, (req, res) => {
 // });
 // const upload = multer({ storage });
 
-
-// Serve upload.html for authenticated users
-app.get('/upload', isAuthenticated, (req, res) => {
-  res.sendFile(path.join(__dirname, '../public', 'upload.html'));
+// Configure multer to use S3
+const upload = multer({
+  storage: multerS3({
+    s3: s3,
+    bucket: 'n11611553-test',
+    key: (req, file, cb) => {
+      cb(null, file.originalname);
+    },
+  }),
 });
 
-// // Upload route
-// app.post('/api/upload', isAuthenticated, upload.single('file'), (req, res) => {
-//   res.redirect('/convert');
-
-// });
+// Upload route
+  app.post('/upload', isAuthenticated, upload.single('file'), (req, res) => {
+  res.redirect('/convert');
+ });
 
 // // List files route
 // app.get('/api/files-list', isAuthenticated, (req, res) => {
@@ -207,6 +218,9 @@ app.get('/upload', isAuthenticated, (req, res) => {
 //     res.json(files);
 //   });
 // });
+
+
+
 
 // Convert route
 app.post('/api/convert', isAuthenticated, (req, res) => {
@@ -247,3 +261,4 @@ initializeS3();
 app.listen(3000, () => {
   console.log('Server is running on port 3000');
 });
+
