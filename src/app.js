@@ -321,7 +321,34 @@ app.post('/api/convert', isAuthenticated, async (req, res) => {
   }
 });
 
+// Download route
+app.get('/api/download', isAuthenticated, (req, res) => {
+  const { file } = req.query;
+  if (!file) {
+    return res.status(400).json({ error: 'File is required' });
+  }
 
+  const bucketName = 'n11611553-test';
+  const key = file;
+  const downloadStream = new PassThrough();
+
+  const getObjectParams = {
+    Bucket: bucketName,
+    Key: key,
+  };
+  const getObjectCommand = new GetObjectCommand(getObjectParams);
+
+  s3.send(getObjectCommand)
+    .then(data => {
+      res.setHeader('Content-Disposition', `attachment; filename="${key}"`);
+      data.Body.pipe(downloadStream);
+      downloadStream.pipe(res);
+    })
+    .catch(err => {
+      console.error('Error downloading file:', err);
+      res.status(500).json({ error: 'Error downloading file', details: err.message });
+    });
+});
 
 
 
