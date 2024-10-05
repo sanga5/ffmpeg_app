@@ -5,14 +5,13 @@ const session = require('express-session');
 const path = require('path');
 const fs = require('fs');
 const cookieParser = require('cookie-parser');
-//const Cognito = require('@aws-sdk/client-cognito-identity-provider');
 const { promisify } = require('util');
 const stream = require('stream');
 const pipeline = promisify(stream.pipeline);
 const { PassThrough } = require('stream');
 const { Upload } = require('@aws-sdk/lib-storage');
 const { v4: uuidv4 } = require('uuid');
-
+const { logFileForUser } = require('./index');
 const { CognitoJwtVerifier } = require('aws-jwt-verify');
 const multer = require('multer');
 const multerS3 = require('multer-s3');
@@ -22,6 +21,7 @@ const app = express();
 const s3 = new S3Client({ region: 'ap-southeast-2' });
 const { createBucket, tagBucket, writeObject, readObject, generatePresignedUrl } = require('./s3');
 
+const qutUsername = 'n11611553@qut.edu.au';
 
 // Middleware to parse JSON and URL-encoded data
 app.use(bodyParser.json());
@@ -34,13 +34,6 @@ app.use(session({
   resave: false,
   saveUninitialized: true
 }));
-
-// // Ensure upload directories exist
-// Object.values(users).forEach(user => {
-//   if (!fs.existsSync(user.uploadDir)) {
-//     fs.mkdirSync(user.uploadDir, { recursive: true });
-//   }
-// });
 
 
 const userPoolId = "ap-southeast-2_ze3iU7nm8"; // Obtain from AWS console
@@ -182,33 +175,48 @@ const upload = multer({
   storage: multerS3({
     s3: s3,
     bucket: 'n11611553-test',
-    key: (req, file, cb) => {
-      cb(null, file.originalname);
+    key: async (req, file, cb) => {
+      const idToken = req.cookies.idToken;
+      const decodedToken = await idVerifier.verify(idToken);
+      const qutUsername = decodedToken['cognito:username'];
+      const userFolder = `${qutUsername}/`;
+      cb(null, `${userFolder}${file.originalname}`);
     },
   }),
 });
 
-// Upload route
-  app.post('/api/upload', isAuthenticated, upload.single('file'), (req, res) => {
-  res.redirect('/convert');
- });
 
-// // List files route
-// app.get('/api/files-list', isAuthenticated, (req, res) => {
-//   fs.readdir(req.session.user.uploadDir, (err, files) => {
-//     if (err) {
-//       return res.status(500).send('Unable to list files');
-//     }
-//     res.json(files);
-//   });
-// });
+// Upload route
+  app.post('/api/upload', isAuthenticated, upload.single('file'), async (req, res) => {
+  const idToken = req.cookies.idToken;
+  const file = req.file;
+
+  try {
+    const decodedToken = await idVerifier.verify(idToken);
+    //const cognitoUsername = decodedToken['cognito:username'];
+
+    await logFileForUser(qutUsername, file.originalname);
+    res.redirect('/convert');
+  } catch (err) {
+    console.log(err);
+    res.send('Error uploading and logging file');
+  }
+
+ });
 
 // List files route
 app.get('/api/files-list', isAuthenticated, async (req, res) => {
   try {
-    const command = new ListObjectsV2Command({
+    const decodedToken = await idVerifier.verify(req.cookies.idToken);
+    const qutUsername = decodedToken['cognito:username']; 
+    const userFolder = `${qutUsername}/`;
+
+    const listParams = {
       Bucket: 'n11611553-test',
-    });
+      Prefix: userFolder,
+    };
+
+    const command = new ListObjectsV2Command(listParams);
     const data = await s3.send(command);
     const files = data.Contents.map(item => item.Key);
     res.json(files);
@@ -219,46 +227,20 @@ app.get('/api/files-list', isAuthenticated, async (req, res) => {
 
 
 
-// // Convert route
-// app.post('/api/convert', isAuthenticated, (req, res) => {
-//   const { file, format } = req.body;
-//   if (!file || !format) {
-//     return res.status(400).json({ error: 'File and format are required' });
-//   }
-
-//   const userDir = req.session.user.uploadDir;
-//   const filePath = path.join(userDir, file);
-//   const outputFilePath = path.join(userDir, `${path.parse(file).name}.${format}`);
-  
-//   // Use ffmpeg to convert the file
-//   ffmpeg(filePath)
-//     .toFormat(format)
-//     .save(outputFilePath)
-//     .on('end', () => {
-//       console.log('Conversion successful:', outputFilePath); // Debugging line
-//       res.json({ message: 'File converted successfully', outputFile: outputFilePath });
-//     })
-//     .on('error', (err) => {
-//       console.error('Error during conversion:', err); // Debugging line
-//       res.status(500).json({ error: 'Error converting file', details: err.message });
-//     });
-// });
-
-
-
-
-
 // Convert route
 app.post('/api/convert', isAuthenticated, async (req, res) => {
+  const idToken = req.cookies.idToken;
+  const decodedToken = await idVerifier.verify(idToken);
+  const userFolder = `${decodedToken['cognito:username']}/`;
+
   const { file, format } = req.body;
   if (!file || !format) {
     return res.status(400).json({ error: 'File and format are required' });
   }
-
   const bucketName = 'n11611553-test';
   const localInputPath = `/tmp/${uuidv4()}-${path.basename(file)}`;
   const localOutputPath = `/tmp/${uuidv4()}.${format}`;
-  const outputKey = `${path.parse(file).name}.${format}`;
+  const outputKey = `${userFolder}${path.parse(file).name}.${format}`;
 
   try {
     // Download the file from S3 to the local disk
@@ -277,6 +259,7 @@ app.post('/api/convert', isAuthenticated, async (req, res) => {
       writeStream.on('finish', resolve);
       writeStream.on('error', reject);
     });
+    
 
     // Convert the file using ffmpeg
     await new Promise((resolve, reject) => {
@@ -307,6 +290,11 @@ app.post('/api/convert', isAuthenticated, async (req, res) => {
     };
     const putObjectCommand = new PutObjectCommand(putObjectParams);
     await s3.send(putObjectCommand);
+    try {
+      await logFileForUser(qutUsername, outputKey);
+    } catch (err) {
+      console.log(err);
+    }
 
     // Delete the local files
     fs.unlinkSync(localInputPath);
@@ -349,20 +337,6 @@ app.get('/api/download', isAuthenticated, (req, res) => {
       res.status(500).json({ error: 'Error downloading file', details: err.message });
     });
 });
-
-
-
-
-// Initialize S3 bucket and perform operations
-async function initializeS3() {
-  await createBucket();
-  await tagBucket();
-  await writeObject();
-  await readObject();
-  await generatePresignedUrl();
-}
-
-initializeS3();
 
 app.listen(3000, () => {
   console.log('Server is running on port 3000');
