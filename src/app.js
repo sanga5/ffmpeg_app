@@ -1,3 +1,4 @@
+require('dotenv').config();
 const Cognito = require("@aws-sdk/client-cognito-identity-provider");
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -20,7 +21,7 @@ const { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command} = re
 const app = express();
 const s3 = new S3Client({ region: 'ap-southeast-2' });
 const { createBucket, tagBucket, writeObject, readObject, generatePresignedUrl } = require('./s3');
-
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const qutUsername = 'n11611553@qut.edu.au';
 
 // Middleware to parse JSON and URL-encoded data
@@ -310,7 +311,9 @@ app.post('/api/convert', isAuthenticated, async (req, res) => {
 });
 
 // Download route
-app.get('/api/download', isAuthenticated, (req, res) => {
+app.get('/api/download', isAuthenticated, async (req, res) => {
+  const idToken = req.cookies.idToken;
+  const decodedToken =  await idVerifier.verify(idToken);
   const { file } = req.query;
   if (!file) {
     return res.status(400).json({ error: 'File is required' });
@@ -326,16 +329,13 @@ app.get('/api/download', isAuthenticated, (req, res) => {
   };
   const getObjectCommand = new GetObjectCommand(getObjectParams);
 
-  s3.send(getObjectCommand)
-    .then(data => {
-      res.setHeader('Content-Disposition', `attachment; filename="${key}"`);
-      data.Body.pipe(downloadStream);
-      downloadStream.pipe(res);
-    })
-    .catch(err => {
-      console.error('Error downloading file:', err);
-      res.status(500).json({ error: 'Error downloading file', details: err.message });
-    });
+  try {
+    const url = await getSignedUrl(s3, getObjectCommand, { expiresIn: 3600 }); // URL valid for 1 hour
+    res.redirect( url );
+  } catch (err) {
+    console.error('Error generating pre-signed URL:', err);
+    res.status(500).json({ error: 'Error generating pre-signed URL', details: err.message });
+  }
 });
 
 app.listen(3000, () => {
