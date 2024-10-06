@@ -194,7 +194,6 @@ const upload = multer({
 
   try {
     const decodedToken = await idVerifier.verify(idToken);
-    //const cognitoUsername = decodedToken['cognito:username'];
 
     await logFileForUser(qutUsername, file.originalname);
     res.redirect('/convert');
