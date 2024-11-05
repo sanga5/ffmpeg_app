@@ -80,7 +80,7 @@ const processMessage = async (message) => {
     console.log(`Uploaded converted file to ${outputKey}`);
 
     // Log the file conversion in DynamoDB
-    await logFileForUser(username, outputKey);
+    await logFileForUser('n11611553@qut.edu.au', outputKey);
     console.log(`Logged conversion for user: ${username}, file: ${outputKey}`);
 
     // Clean up local files
