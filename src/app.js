@@ -23,6 +23,9 @@ const s3 = new S3Client({ region: 'ap-southeast-2' });
 const { createBucket, tagBucket, writeObject, readObject, generatePresignedUrl } = require('./s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const qutUsername = 'n11611553@qut.edu.au';
+const queueUrl = 'https://sqs.ap-southeast-2.amazonaws.com/901444280953/VideoConverterQ'
+const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
+const sqs = new SQSClient({ region: 'ap-southeast-2' });
 
 // Middleware to parse JSON and URL-encoded data
 app.use(bodyParser.json());
@@ -194,8 +197,24 @@ const upload = multer({
 
   try {
     const decodedToken = await idVerifier.verify(idToken);
+    const qutUsername = decodedToken['cognito:username'];
 
-    await logFileForUser(qutUsername, file.originalname);
+    await logFileForUser('n11611553@qut.edu.au', file.originalname);
+
+    // // SQS message
+    // const messageBody = JSON.stringify({
+    //   username: qutUsername,
+    //   filename: file.originalname,
+    //   bucket: 'n11611553-test',
+    // });
+
+    // const sendMessageCommand = new SendMessageCommand({
+    //   QueueUrl: queueUrl,
+    //   MessageBody: messageBody,
+    // });
+    
+    // await sqs.send(sendMessageCommand);
+
     res.redirect('/convert');
   } catch (err) {
     console.log(err);
@@ -230,6 +249,7 @@ app.get('/api/files-list', isAuthenticated, async (req, res) => {
 // Convert route
 app.post('/api/convert', isAuthenticated, async (req, res) => {
   const idToken = req.cookies.idToken;
+  try {
   const decodedToken = await idVerifier.verify(idToken);
   const userFolder = `${decodedToken['cognito:username']}/`;
 
@@ -242,71 +262,91 @@ app.post('/api/convert', isAuthenticated, async (req, res) => {
   const localOutputPath = `/tmp/${uuidv4()}.${format}`;
   const outputKey = `${userFolder}${path.parse(file).name}.${format}`;
 
-  try {
-    // Download the file from S3 to the local disk
-    const getObjectParams = {
-      Bucket: bucketName,
-      Key: file,
-    };
-    const getObjectCommand = new GetObjectCommand(getObjectParams);
-    const data = await s3.send(getObjectCommand);
+  const messageBody = JSON.stringify({
+    username: userFolder,
+    filename: file,
+    bucket: bucketName,
+    format: format,
+  });
 
-    // Write the file to the local disk
-    const writeStream = fs.createWriteStream(localInputPath);
-    data.Body.pipe(writeStream);
+  const sendMessageCommand = new SendMessageCommand({
+    QueueUrl: queueUrl,
+    MessageBody: messageBody,
+  });
 
-    await new Promise((resolve, reject) => {
-      writeStream.on('finish', resolve);
-      writeStream.on('error', reject);
-    });
+  await sqs.send(sendMessageCommand);
+  res.send('Conversion request sent successfully');
+  } 
+  catch (err) {
+  console.error(err);
+  res.status(500).send('Error sending conversion request');
+}
+
+  // try {
+  //   // Download the file from S3 to the local disk
+  //   const getObjectParams = {
+  //     Bucket: bucketName,
+  //     Key: file,
+  //   };
+  //   const getObjectCommand = new GetObjectCommand(getObjectParams);
+  //   const data = await s3.send(getObjectCommand);
+
+  //   // Write the file to the local disk
+  //   const writeStream = fs.createWriteStream(localInputPath);
+  //   data.Body.pipe(writeStream);
+
+  //   await new Promise((resolve, reject) => {
+  //     writeStream.on('finish', resolve);
+  //     writeStream.on('error', reject);
+  //   });
     
 
-    // Convert the file using ffmpeg
-    await new Promise((resolve, reject) => {
-      ffmpeg(localInputPath)
-        .output(localOutputPath)
-        .on('start', commandLine => {
-          console.log('Spawned Ffmpeg with command: ' + commandLine);
-        })
-        .on('progress', progress => {
-          console.log('Processing: ' + (progress.percent || 0).toFixed(2) + '% done');
-        })
-        .on('error', (err, stdout, stderr) => {
-          console.error('Error during conversion:', err.message);
-          console.error('ffmpeg stdout:', stdout);
-          console.error('ffmpeg stderr:', stderr);
-          reject(err);
-        })
-        .on('end', resolve)
-        .run();
-    });
+  //   // Convert the file using ffmpeg
+  //   await new Promise((resolve, reject) => {
+  //     ffmpeg(localInputPath)
+  //       .output(localOutputPath)
+  //       .on('start', commandLine => {
+  //         console.log('Spawned Ffmpeg with command: ' + commandLine);
+  //       })
+  //       .on('progress', progress => {
+  //         console.log('Processing: ' + (progress.percent || 0).toFixed(2) + '% done');
+  //       })
+  //       .on('error', (err, stdout, stderr) => {
+  //         console.error('Error during conversion:', err.message);
+  //         console.error('ffmpeg stdout:', stdout);
+  //         console.error('ffmpeg stderr:', stderr);
+  //         reject(err);
+  //       })
+  //       .on('end', resolve)
+  //       .run();
+  //   });
 
-    // Upload the converted file back to S3
-    const fileStream = fs.createReadStream(localOutputPath);
-    const putObjectParams = {
-      Bucket: bucketName,
-      Key: outputKey,
-      Body: fileStream,
-    };
-    const putObjectCommand = new PutObjectCommand(putObjectParams);
-    await s3.send(putObjectCommand);
-    try {
-      await logFileForUser(qutUsername, outputKey);
-    } catch (err) {
-      console.log(err);
-    }
+  //   // Upload the converted file back to S3
+  //   const fileStream = fs.createReadStream(localOutputPath);
+  //   const putObjectParams = {
+  //     Bucket: bucketName,
+  //     Key: outputKey,
+  //     Body: fileStream,
+  //   };
+  //   const putObjectCommand = new PutObjectCommand(putObjectParams);
+  //   await s3.send(putObjectCommand);
+  //   try {
+  //     await logFileForUser(qutUsername, outputKey);
+  //   } catch (err) {
+  //     console.log(err);
+  //   }
 
-    // Delete the local files
-    fs.unlinkSync(localInputPath);
-    fs.unlinkSync(localOutputPath);
+  //   // Delete the local files
+  //   fs.unlinkSync(localInputPath);
+  //   fs.unlinkSync(localOutputPath);
 
-    res.json({ message: 'File converted successfully', outputFile: outputKey });
-  } catch (err) {
-    console.error('Error during conversion:', err);
-    if (fs.existsSync(localInputPath)) fs.unlinkSync(localInputPath);
-    if (fs.existsSync(localOutputPath)) fs.unlinkSync(localOutputPath);
-    res.status(500).json({ error: 'Error converting file', details: err.message });
-  }
+  //   res.json({ message: 'File converted successfully', outputFile: outputKey });
+  // } catch (err) {
+  //   console.error('Error during conversion:', err);
+  //   if (fs.existsSync(localInputPath)) fs.unlinkSync(localInputPath);
+  //   if (fs.existsSync(localOutputPath)) fs.unlinkSync(localOutputPath);
+  //   res.status(500).json({ error: 'Error converting file', details: err.message });
+  // }
 });
 
 // Download route
