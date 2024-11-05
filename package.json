@@ -4,7 +4,8 @@
     "description": "A web app for video processing using FFmpeg",
     "main": "src/app.js",
     "scripts": {
-        "start": "node src/app.js"
+        "start:app": "node src/app.js",
+        "start:converter": "node src/converter.js"
     },
     "dependencies": {
         "@aws-sdk/client-cognito-identity-provider": "^3.651.1",
