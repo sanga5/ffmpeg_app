@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app-container
+    ports:
+      - "3000:3000"  # Exposes port 3000 on the host to port 3000 in the container
+    volumes:
+      - ~/.aws:/root/.aws  # Mounts AWS credentials
+    environment:
+      - REGION=ap-southeast-2
+      - S3_BUCKET=n11611553-test
+      - QUEUE_URL=https://sqs.ap-southeast-2.amazonaws.com/901444280953/VideoConverterQ
+      - DYNAMODB_TABLE=FileConversionLogs
+    command: ["npm", "run", "start:app"]  # Overrides default CMD to start the app
+
+  converter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: converter-container
+    volumes:
+      - ~/.aws:/root/.aws  # Mounts AWS credentials
+    environment:
+      - REGION=ap-southeast-2
+      - S3_BUCKET=n11611553-test
+      - QUEUE_URL=https://sqs.ap-southeast-2.amazonaws.com/901444280953/VideoConverterQ
+      - DYNAMODB_TABLE=FileConversionLogs
+    command: ["npm", "run", "start:converter"]  # Overrides default CMD to start the converter
